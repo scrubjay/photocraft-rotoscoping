@@ -1310,6 +1310,10 @@ fn document_to_psd_nested(doc: &Document, opts: &PsdExportOptions, depth: u32) -
         if *id == crate::slices_map::SLICES && slices_resource.is_some() {
             continue;
         }
+        // Timeline: regenerated fresh below.
+        if *id == crate::video_map::TIMELINE_INFO {
+            continue;
+        }
         // Measurement scale / count resources: only while they still describe the document.
         if !crate::annotations_map::keep_resource(doc, *id) {
             continue;
@@ -1334,6 +1338,9 @@ fn document_to_psd_nested(doc: &Document, opts: &PsdExportOptions, depth: u32) -
     }
     if let Some(Some(data)) = slices_resource {
         resources.push(ImageResource::new(crate::slices_map::SLICES, data));
+    }
+    if let Some(r) = crate::video_map::export_resource(doc) {
+        resources.push(r);
     }
     resources.push(version_info_resource(true));
 

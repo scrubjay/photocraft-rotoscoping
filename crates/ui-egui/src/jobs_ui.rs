@@ -201,6 +201,9 @@ fn finish_open(app: &mut PhotocraftApp, name: &str, path: Option<&str>, v: &Valu
     let warnings: Vec<String> =
         v.get("warnings").and_then(Value::as_array).map(|a| a.iter().filter_map(|w| w.as_str().map(str::to_string)).collect()).unwrap_or_default();
     app.session.set_active(index);
+    if app.session.active().is_some_and(|d| d.doc.timeline.is_some()) {
+        app.ui.timeline.open = true;
+    }
     if let Some(p) = path {
         app.opened_from(p);
     }

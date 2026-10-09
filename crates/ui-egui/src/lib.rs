@@ -769,6 +769,9 @@ impl PhotocraftApp {
         // Edit › Color Settings policies apply on open; mismatches can ask what to do.
         // No path yet: a bare name isn't a location to save back to (`open_file` sets the path).
         let (_, color) = self.session.open_document(doc, None);
+        if self.session.active().is_some_and(|d| d.doc.timeline.is_some()) {
+            self.ui.timeline.open = true;
+        }
         self.sync_views();
         self.ui.status = format!("Opened {name}");
         self.ui.status_error = false;

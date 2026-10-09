@@ -44,6 +44,7 @@ pub mod smart_map;
 pub mod text_styles_map;
 pub mod tiff_layers;
 pub mod vector_map;
+pub mod video_map;
 
 use photocraft_codecs::{CodecError, EncodeOptions};
 use photocraft_doc::Document;

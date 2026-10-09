@@ -16,7 +16,7 @@ use crate::blocks;
 use crate::pixels::{interleave, max_sample, sample_for_depth, zero_sample};
 
 /// Resources that are mapped to document fields or regenerated on export.
-pub(crate) const MAPPED_RESOURCES: [u16; 19] = [
+pub(crate) const MAPPED_RESOURCES: [u16; 20] = [
     ids::GLOBAL_ANGLE,
     ids::GLOBAL_ALTITUDE,
     ids::RESOLUTION_INFO,
@@ -36,6 +36,7 @@ pub(crate) const MAPPED_RESOURCES: [u16; 19] = [
     crate::channel_map::DISPLAY_INFO,
     crate::channel_map::DISPLAY_INFO_OLD,
     crate::channel_map::QUICK_MASK_INFO,
+    crate::video_map::TIMELINE_INFO,
 ];
 
 /// Blocks regenerated from document fields on export; not kept in
@@ -643,6 +644,7 @@ pub fn psd_to_document_with(file: &PsdFile, ctl: &photocraft_raster::Interrupt) 
         {
             apply_link_groups(&tree, &mut doc.layers, &groups);
         }
+        crate::video_map::import(&mut doc, file, &mut cx.warnings);
         if doc.layers.is_empty()
             && let Some(Ok(all)) = &merged
         {
