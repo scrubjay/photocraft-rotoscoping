@@ -46,12 +46,22 @@ impl Default for OnionSkinSettings {
     }
 }
 
-/// Interactive stretching state when dragging the trim handle at the end of a clip sequence.
+/// Interactive trimming/stretching handle side.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub enum TrimHandle {
+    Left,
+    Right,
+}
+
+/// Interactive stretching or trimming state when dragging a clip handle on the timeline.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct StretchDrag {
     pub layer_id: Option<u64>,
+    pub handle: TrimHandle,
     pub start_frames: usize,
     pub target_frames: usize,
+    /// When dragging left handle: frames trimmed from start (positive = trimmed/shortened, negative = extended)
+    pub front_trim: i64,
 }
 
 /// Timeline panel view state.
@@ -638,23 +648,88 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                     // --- Layer Track Lanes ---
                     if display_rows.is_empty() {
                         let layer_frames = tl.duration;
-                        let effective_frames = if let Some(s) = &app.ui.timeline.stretching && s.layer_id.is_none() {
-                            s.target_frames
+                        let (clip_left, effective_frames) = if let Some(s) = &app.ui.timeline.stretching && s.layer_id.is_none() {
+                            if s.handle == TrimHandle::Left {
+                                (origin.x + (s.front_trim as f32 * zoom).max(0.0), s.target_frames)
+                            } else {
+                                (origin.x, s.target_frames)
+                            }
                         } else {
-                            layer_frames
+                            (origin.x, layer_frames)
                         };
                         let clip_w = (effective_frames as f32 * zoom).max(10.0);
                         let track_rect = Rect::from_min_size(pos2(origin.x, cur_lane_y), vec2(total_timeline_w, 32.0));
                         let track_resp = ui.interact(track_rect, egui::Id::new("timeline_track_scrub_default"), Sense::click_and_drag());
                         ui.painter().rect_filled(track_rect, 0.0, Color32::from_black_alpha(15));
 
-                        let clip_rect = Rect::from_min_size(pos2(origin.x, cur_lane_y + 3.0), vec2(clip_w, 26.0));
+                        let clip_rect = Rect::from_min_size(pos2(clip_left, cur_lane_y + 3.0), vec2(clip_w, 26.0));
                         ui.painter().rect_filled(clip_rect, CornerRadius::same(3), Color32::from_rgb(125, 80, 130));
                         ui.painter().rect_stroke(clip_rect, CornerRadius::same(3), Stroke::new(1.0, Color32::from_rgb(155, 110, 160)), egui::StrokeKind::Inside);
                         ui.painter().text(pos2(clip_rect.left() + 8.0, clip_rect.center().y), egui::Align2::LEFT_CENTER, "Layer 1", egui::FontId::proportional(11.0), Color32::WHITE);
 
-                        // Left Trim Handle
-                        ui.painter().rect_filled(Rect::from_min_size(clip_rect.left_top(), vec2(3.0, clip_rect.height())), CornerRadius::same(2), Color32::from_white_alpha(150));
+                        // Left Trim Handle (Interactive Front Trimming)
+                        let left_handle_w = 12.0;
+                        let left_handle_rect = Rect::from_min_size(pos2(clip_rect.left() - left_handle_w * 0.5, clip_rect.top()), vec2(left_handle_w, clip_rect.height()));
+                        let left_handle_resp = ui.interact(left_handle_rect, egui::Id::new("timeline_trim_handle_left_default"), Sense::click_and_drag());
+                        let is_left_hovered = left_handle_resp.hovered() || left_handle_resp.dragged();
+                        if is_left_hovered {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeWest);
+                        }
+                        if left_handle_resp.drag_started() {
+                            app.ui.timeline.stretching = Some(StretchDrag {
+                                layer_id: None,
+                                handle: TrimHandle::Left,
+                                start_frames: layer_frames,
+                                target_frames: layer_frames,
+                                front_trim: 0,
+                            });
+                        }
+                        if let Some(stretch) = &mut app.ui.timeline.stretching {
+                            if stretch.layer_id.is_none() && stretch.handle == TrimHandle::Left {
+                                if left_handle_resp.dragged() {
+                                    if let Some(ptr) = ui.input(|i| i.pointer.interact_pos()) {
+                                        let rel_x = ptr.x - origin.x;
+                                        let delta = (rel_x / zoom).round() as i64;
+                                        let max_trim = (stretch.start_frames as i64 - 1).max(0);
+                                        stretch.front_trim = delta.clamp(0, max_trim);
+                                        stretch.target_frames = (stretch.start_frames as i64 - stretch.front_trim).max(1) as usize;
+                                        ui.ctx().request_repaint();
+                                    }
+                                }
+                                if left_handle_resp.drag_stopped() {
+                                    let target_start = stretch.front_trim as usize;
+                                    act = Some(("timeline.setProps", json!({ "workStart": target_start })));
+                                    app.ui.timeline.stretching = None;
+                                    ui.ctx().request_repaint();
+                                }
+                            }
+                        }
+
+                        let is_actively_trimming_left = app.ui.timeline.stretching.as_ref().is_some_and(|s| s.layer_id.is_none() && s.handle == TrimHandle::Left);
+                        let left_bar_rect = Rect::from_min_size(clip_rect.left_top(), vec2(4.0, clip_rect.height()));
+                        let left_color = if is_actively_trimming_left {
+                            Color32::from_rgb(255, 200, 60)
+                        } else if is_left_hovered {
+                            Color32::WHITE
+                        } else {
+                            Color32::from_white_alpha(180)
+                        };
+                        ui.painter().rect_filled(left_bar_rect, CornerRadius::same(2), left_color);
+                        if is_actively_trimming_left || is_left_hovered {
+                            let mid_y = clip_rect.center().y;
+                            ui.painter().line_segment([pos2(clip_rect.left() + 2.0, mid_y - 4.0), pos2(clip_rect.left() + 2.0, mid_y + 4.0)], Stroke::new(1.0, Color32::from_black_alpha(120)));
+                        }
+                        if let Some(stretch) = &app.ui.timeline.stretching {
+                            if stretch.layer_id.is_none() && stretch.handle == TrimHandle::Left {
+                                let badge_text = format!("Work Start: {}f (+{}f)", stretch.front_trim, stretch.front_trim);
+                                let badge_pos = pos2(clip_rect.left(), clip_rect.top() - 14.0);
+                                let galley = ui.painter().layout_no_wrap(badge_text, egui::FontId::monospace(10.0), Color32::WHITE);
+                                let badge_rect = Rect::from_center_size(badge_pos, galley.size() + vec2(8.0, 4.0));
+                                ui.painter().rect_filled(badge_rect, CornerRadius::same(3), Color32::from_black_alpha(220));
+                                ui.painter().rect_stroke(badge_rect, CornerRadius::same(3), Stroke::new(1.0, Color32::from_rgb(255, 200, 60)), egui::StrokeKind::Inside);
+                                ui.painter().galley(badge_rect.min + vec2(4.0, 2.0), galley, Color32::WHITE);
+                            }
+                        }
 
                         // Right Trim Handle (Interactive Stretching)
                         let handle_w = 12.0;
@@ -667,12 +742,14 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                         if handle_resp.drag_started() {
                             app.ui.timeline.stretching = Some(StretchDrag {
                                 layer_id: None,
+                                handle: TrimHandle::Right,
                                 start_frames: layer_frames,
                                 target_frames: layer_frames,
+                                front_trim: 0,
                             });
                         }
                         if let Some(stretch) = &mut app.ui.timeline.stretching {
-                            if stretch.layer_id.is_none() {
+                            if stretch.layer_id.is_none() && stretch.handle == TrimHandle::Right {
                                 if handle_resp.dragged() {
                                     if let Some(ptr) = ui.input(|i| i.pointer.interact_pos()) {
                                         let rel_x = ptr.x - origin.x;
@@ -690,7 +767,7 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                             }
                         }
 
-                        let is_actively_stretching = app.ui.timeline.stretching.as_ref().is_some_and(|s| s.layer_id.is_none());
+                        let is_actively_stretching = app.ui.timeline.stretching.as_ref().is_some_and(|s| s.layer_id.is_none() && s.handle == TrimHandle::Right);
                         let handle_bar_rect = Rect::from_min_size(pos2(clip_rect.right() - 4.0, clip_rect.top()), vec2(4.0, clip_rect.height()));
                         let handle_color = if is_actively_stretching {
                             Color32::from_rgb(255, 200, 60)
@@ -705,7 +782,7 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                             ui.painter().line_segment([pos2(clip_rect.right() - 2.0, mid_y - 4.0), pos2(clip_rect.right() - 2.0, mid_y + 4.0)], Stroke::new(1.0, Color32::from_black_alpha(120)));
                         }
                         if let Some(stretch) = &app.ui.timeline.stretching {
-                            if stretch.layer_id.is_none() {
+                            if stretch.layer_id.is_none() && stretch.handle == TrimHandle::Right {
                                 let diff = stretch.target_frames as i64 - stretch.start_frames as i64;
                                 let badge_text = if diff >= 0 {
                                     format!("{}f (+{}f)", stretch.target_frames, diff)
@@ -721,7 +798,7 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                             }
                         }
 
-                        if (track_resp.clicked() || track_resp.dragged()) && !is_handle_hovered && !handle_resp.dragged() && app.ui.timeline.stretching.is_none() {
+                        if (track_resp.clicked() || track_resp.dragged()) && !is_handle_hovered && !handle_resp.dragged() && !is_left_hovered && !left_handle_resp.dragged() && app.ui.timeline.stretching.is_none() {
                             any_track_scrub = true;
                         }
                         cur_lane_y += 32.0;
@@ -731,10 +808,14 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                             let is_video = l.video.is_some();
                             let is_active = active_id == Some(l.id);
                             let layer_frames = l.video.as_ref().map_or(tl.duration, |v| v.frames.len());
-                            let effective_frames = if let Some(s) = &app.ui.timeline.stretching && s.layer_id == Some(l.id.0) {
-                                s.target_frames
+                            let (clip_left, effective_frames) = if let Some(s) = &app.ui.timeline.stretching && s.layer_id == Some(l.id.0) {
+                                if s.handle == TrimHandle::Left {
+                                    (origin.x + (s.front_trim as f32 * zoom).max(0.0), s.target_frames)
+                                } else {
+                                    (origin.x, s.target_frames)
+                                }
                             } else {
-                                layer_frames
+                                (origin.x, layer_frames)
                             };
                             let clip_w = (effective_frames as f32 * zoom).max(10.0);
 
@@ -744,7 +825,7 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                             let lane_bg = if is_active { Color32::from_white_alpha(8) } else { Color32::from_black_alpha(15) };
                             ui.painter().rect_filled(track_rect, 0.0, lane_bg);
 
-                            let clip_rect = Rect::from_min_size(pos2(origin.x, cur_lane_y + 3.0), vec2(clip_w, 26.0));
+                            let clip_rect = Rect::from_min_size(pos2(clip_left, cur_lane_y + 3.0), vec2(clip_w, 26.0));
 
                             // Distinct color coding: Slate Blue/Indigo for Video layers, Mauve/Plum for non-video layers
                             let (clip_color, border_color) = if is_video {
@@ -756,8 +837,83 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                             ui.painter().rect_filled(clip_rect, CornerRadius::same(3), clip_color);
                             ui.painter().rect_stroke(clip_rect, CornerRadius::same(3), Stroke::new(1.0, border_color), egui::StrokeKind::Inside);
 
-                            // Left Trim Handle
-                            ui.painter().rect_filled(Rect::from_min_size(clip_rect.left_top(), vec2(3.0, clip_rect.height())), CornerRadius::same(2), Color32::from_white_alpha(150));
+                            // Left Trim Handle (Interactive Front Trimming)
+                            let left_handle_w = 12.0;
+                            let left_handle_rect = Rect::from_min_size(pos2(clip_rect.left() - left_handle_w * 0.5, clip_rect.top()), vec2(left_handle_w, clip_rect.height()));
+                            let left_handle_resp = ui.interact(left_handle_rect, egui::Id::new(("timeline_trim_handle_left", l.id.0)), Sense::click_and_drag());
+                            let is_left_hovered = left_handle_resp.hovered() || left_handle_resp.dragged();
+                            if is_left_hovered {
+                                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeWest);
+                            }
+                            if left_handle_resp.drag_started() {
+                                app.ui.timeline.stretching = Some(StretchDrag {
+                                    layer_id: Some(l.id.0),
+                                    handle: TrimHandle::Left,
+                                    start_frames: layer_frames,
+                                    target_frames: layer_frames,
+                                    front_trim: 0,
+                                });
+                            }
+                            if let Some(stretch) = &mut app.ui.timeline.stretching {
+                                if stretch.layer_id == Some(l.id.0) && stretch.handle == TrimHandle::Left {
+                                    if left_handle_resp.dragged() {
+                                        if let Some(ptr) = ui.input(|i| i.pointer.interact_pos()) {
+                                            let rel_x = ptr.x - origin.x;
+                                            let delta = (rel_x / zoom).round() as i64;
+                                            let max_trim = (stretch.start_frames as i64 - 1).max(0);
+                                            stretch.front_trim = delta.clamp(-10_000, max_trim);
+                                            stretch.target_frames = (stretch.start_frames as i64 - stretch.front_trim).max(1) as usize;
+                                            ui.ctx().request_repaint();
+                                        }
+                                    }
+                                    if left_handle_resp.drag_stopped() {
+                                        let trim = stretch.front_trim;
+                                        if trim != 0 {
+                                            if is_video {
+                                                act = Some(("layer.videoLayers.trimFront", json!({ "layer": l.id.0, "trim": trim })));
+                                            } else {
+                                                let new_start = (tl.work_start as i64 + trim).clamp(0, tl.duration as i64 - 1) as usize;
+                                                act = Some(("timeline.setProps", json!({ "workStart": new_start })));
+                                            }
+                                        }
+                                        app.ui.timeline.stretching = None;
+                                        ui.ctx().request_repaint();
+                                    }
+                                }
+                            }
+
+                            let is_actively_trimming_left = app.ui.timeline.stretching.as_ref().is_some_and(|s| s.layer_id == Some(l.id.0) && s.handle == TrimHandle::Left);
+                            let left_bar_rect = Rect::from_min_size(clip_rect.left_top(), vec2(4.0, clip_rect.height()));
+                            let left_color = if is_actively_trimming_left {
+                                Color32::from_rgb(255, 200, 60)
+                            } else if is_left_hovered {
+                                Color32::WHITE
+                            } else {
+                                Color32::from_white_alpha(180)
+                            };
+                            ui.painter().rect_filled(left_bar_rect, CornerRadius::same(2), left_color);
+                            if is_actively_trimming_left || is_left_hovered {
+                                let mid_y = clip_rect.center().y;
+                                ui.painter().line_segment([pos2(clip_rect.left() + 2.0, mid_y - 4.0), pos2(clip_rect.left() + 2.0, mid_y + 4.0)], Stroke::new(1.0, Color32::from_black_alpha(120)));
+                            }
+                            if let Some(stretch) = &app.ui.timeline.stretching {
+                                if stretch.layer_id == Some(l.id.0) && stretch.handle == TrimHandle::Left {
+                                    let trim = stretch.front_trim;
+                                    let badge_text = if trim > 0 {
+                                        format!("Trim start: -{}f ({}f left)", trim, stretch.target_frames)
+                                    } else if trim < 0 {
+                                        format!("Extend start: +{}f ({}f total)", -trim, stretch.target_frames)
+                                    } else {
+                                        format!("0f ({}f)", stretch.target_frames)
+                                    };
+                                    let badge_pos = pos2(clip_rect.left(), clip_rect.top() - 14.0);
+                                    let galley = ui.painter().layout_no_wrap(badge_text, egui::FontId::monospace(10.0), Color32::WHITE);
+                                    let badge_rect = Rect::from_center_size(badge_pos, galley.size() + vec2(8.0, 4.0));
+                                    ui.painter().rect_filled(badge_rect, CornerRadius::same(3), Color32::from_black_alpha(220));
+                                    ui.painter().rect_stroke(badge_rect, CornerRadius::same(3), Stroke::new(1.0, Color32::from_rgb(255, 200, 60)), egui::StrokeKind::Inside);
+                                    ui.painter().galley(badge_rect.min + vec2(4.0, 2.0), galley, Color32::WHITE);
+                                }
+                            }
 
                             // Right Trim Handle (Interactive Stretching)
                             let handle_w = 12.0;
@@ -770,12 +926,14 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                             if handle_resp.drag_started() {
                                 app.ui.timeline.stretching = Some(StretchDrag {
                                     layer_id: Some(l.id.0),
+                                    handle: TrimHandle::Right,
                                     start_frames: layer_frames,
                                     target_frames: layer_frames,
+                                    front_trim: 0,
                                 });
                             }
                             if let Some(stretch) = &mut app.ui.timeline.stretching {
-                                if stretch.layer_id == Some(l.id.0) {
+                                if stretch.layer_id == Some(l.id.0) && stretch.handle == TrimHandle::Right {
                                     if handle_resp.dragged() {
                                         if let Some(ptr) = ui.input(|i| i.pointer.interact_pos()) {
                                             let rel_x = ptr.x - origin.x;
@@ -797,7 +955,7 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                                 }
                             }
 
-                            let is_actively_stretching = app.ui.timeline.stretching.as_ref().is_some_and(|s| s.layer_id == Some(l.id.0));
+                            let is_actively_stretching = app.ui.timeline.stretching.as_ref().is_some_and(|s| s.layer_id == Some(l.id.0) && s.handle == TrimHandle::Right);
                             let handle_bar_rect = Rect::from_min_size(pos2(clip_rect.right() - 4.0, clip_rect.top()), vec2(4.0, clip_rect.height()));
                             let handle_color = if is_actively_stretching {
                                 Color32::from_rgb(255, 200, 60)
@@ -812,7 +970,7 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                                 ui.painter().line_segment([pos2(clip_rect.right() - 2.0, mid_y - 4.0), pos2(clip_rect.right() - 2.0, mid_y + 4.0)], Stroke::new(1.0, Color32::from_black_alpha(120)));
                             }
                             if let Some(stretch) = &app.ui.timeline.stretching {
-                                if stretch.layer_id == Some(l.id.0) {
+                                if stretch.layer_id == Some(l.id.0) && stretch.handle == TrimHandle::Right {
                                     let diff = stretch.target_frames as i64 - stretch.start_frames as i64;
                                     let badge_text = if diff >= 0 {
                                         format!("{}f (+{}f)", stretch.target_frames, diff)
@@ -850,7 +1008,7 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                                 Color32::WHITE,
                             );
 
-                            if (track_resp.clicked() || track_resp.dragged()) && !is_handle_hovered && !handle_resp.dragged() && app.ui.timeline.stretching.is_none() {
+                            if (track_resp.clicked() || track_resp.dragged()) && !is_handle_hovered && !handle_resp.dragged() && !is_left_hovered && !left_handle_resp.dragged() && app.ui.timeline.stretching.is_none() {
                                 any_track_scrub = true;
                             }
                             cur_lane_y += 32.0;

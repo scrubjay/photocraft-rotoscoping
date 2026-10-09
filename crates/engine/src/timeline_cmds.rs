@@ -158,6 +158,10 @@ pub fn specs() -> Vec<CommandSpec> {
             crate::video_cmds::split_at_playhead(s, p)?;
             info(s)
         }),
+        spec!("timeline.trimFront", "Trim Clip Start", r#"{frames?: 1, layer?: id} → {timeline}"#, has_timeline, |s, p| {
+            crate::video_cmds::trim_front(s, p)?;
+            info(s)
+        }),
         spec!("timeline.setProps", "Timeline Settings", r#"{fps?, duration?, workStart?, workEnd?} → {timeline}"#, has_timeline, |s, p| set_props(s, p)),
         spec!("timeline.setFrameRate", "Set Timeline Frame Rate", r#"{fps: 24.0} → {timeline}"#, has_timeline, |s, p| set_frame_rate(s, p)),
         spec!("timeline.info", "Timeline Info", "{} → {timeline}", has_doc, |s, _| info(s)),

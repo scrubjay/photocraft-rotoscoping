@@ -695,6 +695,62 @@ pub fn set_frame_count(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"frames": r}))
 }
 
+/// Trim or prepend frames at the beginning of a video layer.
+/// Positive `trim`: removes N frames from the start of the frame stack.
+/// Negative `trim`: prepends |N| blank frames at the start of the frame stack.
+pub(crate) fn trim_front(s: &mut Session, p: &Value) -> Result<Value> {
+    let trim = p
+        .get("trim")
+        .or_else(|| p.get("frames"))
+        .or_else(|| p.get("count"))
+        .and_then(Value::as_i64)
+        .ok_or_else(|| EngineError::BadParams {
+            cmd: "layer.videoLayers.trimFront".into(),
+            msg: "need `trim` (delta frames to trim from front)".into(),
+        })?;
+    if trim == 0 {
+        return Ok(json!({ "trimmed": 0 }));
+    }
+    let fmt = s.active().ok_or(EngineError::NoDocument)?.doc.pixel_format();
+    let target_layer = p.get("layer").and_then(Value::as_u64).map(LayerId);
+    let r = s.edit("Trim Video Layer Start", |doc, active| {
+        let cur = doc.timeline.as_ref().map_or(0, |t| t.current);
+        commit_frame(doc, cur);
+        let id = target_layer.or(*active).ok_or(EngineError::NoDocument)?;
+        let l = doc.layer_mut(id).ok_or(EngineError::NoLayer(id))?;
+        if let Some(v) = &mut l.video {
+            if trim > 0 {
+                let remove_count = (trim as usize).min(v.frames.len().saturating_sub(1));
+                if remove_count > 0 {
+                    v.frames.drain(0..remove_count);
+                }
+            } else if trim < 0 {
+                let add_count = (-trim as usize).min(10_000);
+                let mut new_frames = Vec::with_capacity(v.frames.len() + add_count);
+                for _ in 0..add_count {
+                    new_frames.push(blank_of(fmt));
+                }
+                new_frames.append(&mut v.frames);
+                v.frames = new_frames;
+            }
+        }
+        if let Some(t) = &mut doc.timeline {
+            if trim > 0 {
+                t.current = t.current.saturating_sub(trim as usize);
+            } else if trim < 0 {
+                t.current = t.current.saturating_add(-trim as usize);
+            }
+            let max_frames = doc.layers.iter().map(|l| l.video.as_ref().map_or(0, |v| v.frames.len())).max().unwrap_or(0);
+            t.duration = t.duration.max(max_frames.max(1));
+            t.work_end = t.work_end.max(t.duration);
+            t.clamp();
+        }
+        sync(doc);
+        Ok(json!({ "trimmed": trim }))
+    })?;
+    Ok(r)
+}
+
 macro_rules! spec {
     ($id:expr, $label:expr, $menu:expr, $en:expr, $run:expr) => {
         CommandSpec { id: $id, label: $label, menu: $menu, shortcut: None, params: "{} → {}", enabled: $en, journal: true, run: $run }
@@ -715,6 +771,7 @@ pub fn specs() -> Vec<CommandSpec> {
         spec!("layer.rasterize.video", "Video", &["Layer", "Rasterize"], active_video, |s, p| rasterize(s, p)),
         spec!("layer.videoLayers.splitAtPlayhead", "Split at Playhead", &[], has_doc, |s, p| split_at_playhead(s, p)),
         spec!("layer.videoLayers.setFrameCount", "Set Video Frame Count", &[], has_doc, |s, p| set_frame_count(s, p)),
+        spec!("layer.videoLayers.trimFront", "Trim Video Layer Start", &[], has_doc, |s, p| trim_front(s, p)),
         spec!("layer.videoLayers.newVideoLayerFromFile", "New Video Layer from File…", vl, has_doc, |s, p| new_from_file(s, p)),
         spec!("layer.videoLayers.replaceFootage", "Replace Footage…", vl, active_video, |s, p| replace_footage(s, p)),
         spec!("layer.videoLayers.interpretFootage", "Interpret Footage…", vl, active_video, |s, p| interpret_footage(s, p)),

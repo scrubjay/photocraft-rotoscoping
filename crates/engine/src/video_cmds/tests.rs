@@ -222,3 +222,27 @@ fn translate_video_layer_moves_all_frames() {
     assert_eq!(v.frames[1].content_bounds(), Rect::new(4, 3, 8, 7));
 }
 
+#[test]
+fn trim_front_shortens_and_extends_frame_stack() {
+    let mut s = session();
+    let r = s.execute("layer.videoLayers.newBlankVideoLayer", json!({})).unwrap();
+    let id = LayerId(r["layer"].as_u64().unwrap());
+    s.execute("layer.videoLayers.setFrameCount", json!({"layer": id.0, "count": 5})).unwrap();
+    assert_eq!(frames(&s, id), 5);
+
+    // Trim 2 frames from the front -> 3 frames remain
+    s.execute("layer.videoLayers.trimFront", json!({"layer": id.0, "trim": 2})).unwrap();
+    assert_eq!(frames(&s, id), 3);
+
+    // Negative trim prepends 2 blank frames -> 5 frames total
+    s.execute("layer.videoLayers.trimFront", json!({"layer": id.0, "trim": -2})).unwrap();
+    assert_eq!(frames(&s, id), 5);
+
+    // Cannot trim all frames to zero (clamps to at least 1)
+    s.execute("layer.videoLayers.trimFront", json!({"layer": id.0, "trim": 100})).unwrap();
+    assert_eq!(frames(&s, id), 1);
+
+    // Graceful failure on invalid params
+    assert!(s.execute("layer.videoLayers.trimFront", json!({})).is_err());
+}
+
