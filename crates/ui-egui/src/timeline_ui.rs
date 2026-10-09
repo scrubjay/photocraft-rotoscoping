@@ -684,17 +684,16 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                                 front_trim: 0,
                             });
                         }
-                        if let Some(stretch) = &mut app.ui.timeline.stretching {
-                            if stretch.layer_id.is_none() && stretch.handle == TrimHandle::Left {
-                                if left_handle_resp.dragged() {
-                                    if let Some(ptr) = ui.input(|i| i.pointer.interact_pos()) {
+                        if let Some(stretch) = &mut app.ui.timeline.stretching
+                            && stretch.layer_id.is_none() && stretch.handle == TrimHandle::Left {
+                                if left_handle_resp.dragged()
+                                    && let Some(ptr) = ui.input(|i| i.pointer.interact_pos()) {
                                         let rel_x = ptr.x - origin.x;
                                         let delta = (rel_x / zoom).round() as i64;
                                         let max_trim = (stretch.start_frames as i64 - 1).max(0);
                                         stretch.front_trim = delta.clamp(0, max_trim);
                                         stretch.target_frames = (stretch.start_frames as i64 - stretch.front_trim).max(1) as usize;
                                         ui.ctx().request_repaint();
-                                    }
                                 }
                                 if left_handle_resp.drag_stopped() {
                                     let target_start = stretch.front_trim as usize;
@@ -702,7 +701,6 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                                     app.ui.timeline.stretching = None;
                                     ui.ctx().request_repaint();
                                 }
-                            }
                         }
 
                         let is_actively_trimming_left = app.ui.timeline.stretching.as_ref().is_some_and(|s| s.layer_id.is_none() && s.handle == TrimHandle::Left);
@@ -719,8 +717,8 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                             let mid_y = clip_rect.center().y;
                             ui.painter().line_segment([pos2(clip_rect.left() + 2.0, mid_y - 4.0), pos2(clip_rect.left() + 2.0, mid_y + 4.0)], Stroke::new(1.0, Color32::from_black_alpha(120)));
                         }
-                        if let Some(stretch) = &app.ui.timeline.stretching {
-                            if stretch.layer_id.is_none() && stretch.handle == TrimHandle::Left {
+                        if let Some(stretch) = &app.ui.timeline.stretching
+                            && stretch.layer_id.is_none() && stretch.handle == TrimHandle::Left {
                                 let badge_text = format!("Work Start: {}f (+{}f)", stretch.front_trim, stretch.front_trim);
                                 let badge_pos = pos2(clip_rect.left(), clip_rect.top() - 14.0);
                                 let galley = ui.painter().layout_no_wrap(badge_text, egui::FontId::monospace(10.0), Color32::WHITE);
@@ -728,7 +726,6 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                                 ui.painter().rect_filled(badge_rect, CornerRadius::same(3), Color32::from_black_alpha(220));
                                 ui.painter().rect_stroke(badge_rect, CornerRadius::same(3), Stroke::new(1.0, Color32::from_rgb(255, 200, 60)), egui::StrokeKind::Inside);
                                 ui.painter().galley(badge_rect.min + vec2(4.0, 2.0), galley, Color32::WHITE);
-                            }
                         }
 
                         // Right Trim Handle (Interactive Stretching)
@@ -748,15 +745,14 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                                 front_trim: 0,
                             });
                         }
-                        if let Some(stretch) = &mut app.ui.timeline.stretching {
-                            if stretch.layer_id.is_none() && stretch.handle == TrimHandle::Right {
-                                if handle_resp.dragged() {
-                                    if let Some(ptr) = ui.input(|i| i.pointer.interact_pos()) {
+                        if let Some(stretch) = &mut app.ui.timeline.stretching
+                            && stretch.layer_id.is_none() && stretch.handle == TrimHandle::Right {
+                                if handle_resp.dragged()
+                                    && let Some(ptr) = ui.input(|i| i.pointer.interact_pos()) {
                                         let rel_x = ptr.x - origin.x;
                                         let frames = (rel_x / zoom).round().max(1.0) as usize;
                                         stretch.target_frames = frames.min(100_000);
                                         ui.ctx().request_repaint();
-                                    }
                                 }
                                 if handle_resp.drag_stopped() {
                                     let target = stretch.target_frames;
@@ -764,7 +760,6 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                                     app.ui.timeline.stretching = None;
                                     ui.ctx().request_repaint();
                                 }
-                            }
                         }
 
                         let is_actively_stretching = app.ui.timeline.stretching.as_ref().is_some_and(|s| s.layer_id.is_none() && s.handle == TrimHandle::Right);
@@ -781,8 +776,8 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                             let mid_y = clip_rect.center().y;
                             ui.painter().line_segment([pos2(clip_rect.right() - 2.0, mid_y - 4.0), pos2(clip_rect.right() - 2.0, mid_y + 4.0)], Stroke::new(1.0, Color32::from_black_alpha(120)));
                         }
-                        if let Some(stretch) = &app.ui.timeline.stretching {
-                            if stretch.layer_id.is_none() && stretch.handle == TrimHandle::Right {
+                        if let Some(stretch) = &app.ui.timeline.stretching
+                            && stretch.layer_id.is_none() && stretch.handle == TrimHandle::Right {
                                 let diff = stretch.target_frames as i64 - stretch.start_frames as i64;
                                 let badge_text = if diff >= 0 {
                                     format!("{}f (+{}f)", stretch.target_frames, diff)
@@ -795,7 +790,6 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                                 ui.painter().rect_filled(badge_rect, CornerRadius::same(3), Color32::from_black_alpha(220));
                                 ui.painter().rect_stroke(badge_rect, CornerRadius::same(3), Stroke::new(1.0, Color32::from_rgb(255, 200, 60)), egui::StrokeKind::Inside);
                                 ui.painter().galley(badge_rect.min + vec2(4.0, 2.0), galley, Color32::WHITE);
-                            }
                         }
 
                         if (track_resp.clicked() || track_resp.dragged()) && !is_handle_hovered && !handle_resp.dragged() && !is_left_hovered && !left_handle_resp.dragged() && app.ui.timeline.stretching.is_none() {
@@ -854,17 +848,16 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                                     front_trim: 0,
                                 });
                             }
-                            if let Some(stretch) = &mut app.ui.timeline.stretching {
-                                if stretch.layer_id == Some(l.id.0) && stretch.handle == TrimHandle::Left {
-                                    if left_handle_resp.dragged() {
-                                        if let Some(ptr) = ui.input(|i| i.pointer.interact_pos()) {
+                            if let Some(stretch) = &mut app.ui.timeline.stretching
+                                && stretch.layer_id == Some(l.id.0) && stretch.handle == TrimHandle::Left {
+                                    if left_handle_resp.dragged()
+                                        && let Some(ptr) = ui.input(|i| i.pointer.interact_pos()) {
                                             let rel_x = ptr.x - origin.x;
                                             let delta = (rel_x / zoom).round() as i64;
                                             let max_trim = (stretch.start_frames as i64 - 1).max(0);
                                             stretch.front_trim = delta.clamp(-10_000, max_trim);
                                             stretch.target_frames = (stretch.start_frames as i64 - stretch.front_trim).max(1) as usize;
                                             ui.ctx().request_repaint();
-                                        }
                                     }
                                     if left_handle_resp.drag_stopped() {
                                         let trim = stretch.front_trim;
@@ -879,7 +872,6 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                                         app.ui.timeline.stretching = None;
                                         ui.ctx().request_repaint();
                                     }
-                                }
                             }
 
                             let is_actively_trimming_left = app.ui.timeline.stretching.as_ref().is_some_and(|s| s.layer_id == Some(l.id.0) && s.handle == TrimHandle::Left);
@@ -896,8 +888,8 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                                 let mid_y = clip_rect.center().y;
                                 ui.painter().line_segment([pos2(clip_rect.left() + 2.0, mid_y - 4.0), pos2(clip_rect.left() + 2.0, mid_y + 4.0)], Stroke::new(1.0, Color32::from_black_alpha(120)));
                             }
-                            if let Some(stretch) = &app.ui.timeline.stretching {
-                                if stretch.layer_id == Some(l.id.0) && stretch.handle == TrimHandle::Left {
+                            if let Some(stretch) = &app.ui.timeline.stretching
+                                && stretch.layer_id == Some(l.id.0) && stretch.handle == TrimHandle::Left {
                                     let trim = stretch.front_trim;
                                     let badge_text = if trim > 0 {
                                         format!("Trim start: -{}f ({}f left)", trim, stretch.target_frames)
@@ -912,7 +904,6 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                                     ui.painter().rect_filled(badge_rect, CornerRadius::same(3), Color32::from_black_alpha(220));
                                     ui.painter().rect_stroke(badge_rect, CornerRadius::same(3), Stroke::new(1.0, Color32::from_rgb(255, 200, 60)), egui::StrokeKind::Inside);
                                     ui.painter().galley(badge_rect.min + vec2(4.0, 2.0), galley, Color32::WHITE);
-                                }
                             }
 
                             // Right Trim Handle (Interactive Stretching)
@@ -932,15 +923,14 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                                     front_trim: 0,
                                 });
                             }
-                            if let Some(stretch) = &mut app.ui.timeline.stretching {
-                                if stretch.layer_id == Some(l.id.0) && stretch.handle == TrimHandle::Right {
-                                    if handle_resp.dragged() {
-                                        if let Some(ptr) = ui.input(|i| i.pointer.interact_pos()) {
+                            if let Some(stretch) = &mut app.ui.timeline.stretching
+                                && stretch.layer_id == Some(l.id.0) && stretch.handle == TrimHandle::Right {
+                                    if handle_resp.dragged()
+                                        && let Some(ptr) = ui.input(|i| i.pointer.interact_pos()) {
                                             let rel_x = ptr.x - origin.x;
                                             let frames = (rel_x / zoom).round().max(1.0) as usize;
                                             stretch.target_frames = frames.min(100_000);
                                             ui.ctx().request_repaint();
-                                        }
                                     }
                                     if handle_resp.drag_stopped() {
                                         let target = stretch.target_frames;
@@ -952,7 +942,6 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                                         app.ui.timeline.stretching = None;
                                         ui.ctx().request_repaint();
                                     }
-                                }
                             }
 
                             let is_actively_stretching = app.ui.timeline.stretching.as_ref().is_some_and(|s| s.layer_id == Some(l.id.0) && s.handle == TrimHandle::Right);
@@ -969,8 +958,8 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                                 let mid_y = clip_rect.center().y;
                                 ui.painter().line_segment([pos2(clip_rect.right() - 2.0, mid_y - 4.0), pos2(clip_rect.right() - 2.0, mid_y + 4.0)], Stroke::new(1.0, Color32::from_black_alpha(120)));
                             }
-                            if let Some(stretch) = &app.ui.timeline.stretching {
-                                if stretch.layer_id == Some(l.id.0) && stretch.handle == TrimHandle::Right {
+                            if let Some(stretch) = &app.ui.timeline.stretching
+                                && stretch.layer_id == Some(l.id.0) && stretch.handle == TrimHandle::Right {
                                     let diff = stretch.target_frames as i64 - stretch.start_frames as i64;
                                     let badge_text = if diff >= 0 {
                                         format!("{}f (+{}f)", stretch.target_frames, diff)
@@ -983,7 +972,6 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                                     ui.painter().rect_filled(badge_rect, CornerRadius::same(3), Color32::from_black_alpha(220));
                                     ui.painter().rect_stroke(badge_rect, CornerRadius::same(3), Stroke::new(1.0, Color32::from_rgb(255, 200, 60)), egui::StrokeKind::Inside);
                                     ui.painter().galley(badge_rect.min + vec2(4.0, 2.0), galley, Color32::WHITE);
-                                }
                             }
 
                             // Frame dividers (video layers with zoom >= 14.0)
@@ -1093,13 +1081,12 @@ fn timeline_content(app: &mut PhotocraftApp, ui: &mut egui::Ui, is_docked: bool)
                 ui.horizontal(|ui| {
                     ui.label("Custom FPS:");
                     ui.add(egui::TextEdit::singleline(&mut app.ui.timeline.custom_fps_input).desired_width(70.0));
-                    if ui.button(tl!("Apply")).clicked() {
-                        if let Ok(fps) = app.ui.timeline.custom_fps_input.trim().parse::<f64>() {
-                            if fps >= 1.0 && fps <= 240.0 {
-                                act = Some(("timeline.setFrameRate", json!({ "fps": fps })));
-                                app.ui.timeline.frame_rate_modal = false;
-                            }
-                        }
+                    if ui.button(tl!("Apply")).clicked()
+                        && let Ok(fps) = app.ui.timeline.custom_fps_input.trim().parse::<f64>()
+                        && (1.0..=240.0).contains(&fps)
+                    {
+                        act = Some(("timeline.setFrameRate", json!({ "fps": fps })));
+                        app.ui.timeline.frame_rate_modal = false;
                     }
                 });
                 ui.add_space(8.0);

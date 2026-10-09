@@ -151,14 +151,13 @@ fn new_video_layer_from_mp4_video_file() {
             .arg("testsrc=duration=0.5:size=64x48:rate=10")
             .arg(&video_file)
             .output();
-        if let Ok(output) = res {
-            if output.status.success() {
+        if let Ok(output) = res
+            && output.status.success() {
                 let mut s = session();
                 let r = s.execute("layer.videoLayers.newVideoLayerFromFile", json!({"path": video_file.to_str().unwrap()})).unwrap();
                 let frames_count = r["frames"].as_u64().unwrap();
                 assert!(frames_count >= 4);
                 let _ = std::fs::remove_file(&video_file);
-            }
         }
     }
 }

@@ -29,10 +29,10 @@ pub fn ensure(app: &mut PhotocraftApp, ctx: &egui::Context, idx: usize) -> Optio
     let revision = st.revision;
 
     // Check if cached texture is still valid
-    if let Some(cache) = app.onion_skins.get(&doc_id) {
-        if cache.revision == revision && cache.current_frame == cur && cache.settings == settings {
-            return Some(cache.tex.id());
-        }
+    if let Some(cache) = app.onion_skins.get(&doc_id)
+        && cache.revision == revision && cache.current_frame == cur && cache.settings == settings
+    {
+        return Some(cache.tex.id());
     }
 
     // Find active video layer or topmost video layer
@@ -57,16 +57,16 @@ pub fn ensure(app: &mut PhotocraftApp, ctx: &egui::Context, idx: usize) -> Optio
     // 1. Render past frames (preceding)
     let n_before = settings.frames_before.min(10);
     for step in 1..=n_before {
-        if let Some(frame_idx) = cur.checked_sub(step * spacing) {
-            if frame_idx < v.frames.len() {
-                let factor = if n_before > 1 {
-                    (step - 1) as f32 / (n_before - 1) as f32
-                } else {
-                    0.0
-                };
-                let alpha = max_a - factor * (max_a - min_a);
-                blend_frame(&v.frames[frame_idx], bounds, &mut overlay, alpha, true, settings.tint_colors);
-            }
+        if let Some(frame_idx) = cur.checked_sub(step * spacing)
+            && frame_idx < v.frames.len()
+        {
+            let factor = if n_before > 1 {
+                (step - 1) as f32 / (n_before - 1) as f32
+            } else {
+                0.0
+            };
+            let alpha = max_a - factor * (max_a - min_a);
+            blend_frame(&v.frames[frame_idx], bounds, &mut overlay, alpha, true, settings.tint_colors);
         }
     }
 
@@ -98,24 +98,23 @@ pub fn ensure(app: &mut PhotocraftApp, ctx: &egui::Context, idx: usize) -> Optio
     Some(tex_id)
 }
 
-fn find_video_layer<'a>(doc: &'a Document, active: Option<photocraft_doc::LayerId>) -> Option<&'a Layer> {
-    if let Some(id) = active {
-        if let Some(l) = doc.layer(id) {
-            if l.video.is_some() {
-                return Some(l);
-            }
-        }
+fn find_video_layer(doc: &Document, active: Option<photocraft_doc::LayerId>) -> Option<&Layer> {
+    if let Some(id) = active
+        && let Some(l) = doc.layer(id)
+        && l.video.is_some()
+    {
+        return Some(l);
     }
     // Fall back to first layer with video data
-    fn find_in_layers<'a>(layers: &'a [Layer]) -> Option<&'a Layer> {
+    fn find_in_layers(layers: &[Layer]) -> Option<&Layer> {
         for l in layers {
             if l.video.is_some() {
                 return Some(l);
             }
-            if let Some(ch) = l.children() {
-                if let Some(found) = find_in_layers(ch) {
-                    return Some(found);
-                }
+            if let Some(ch) = l.children()
+                && let Some(found) = find_in_layers(ch)
+            {
+                return Some(found);
             }
         }
         None

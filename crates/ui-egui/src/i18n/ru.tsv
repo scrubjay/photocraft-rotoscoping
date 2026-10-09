@@ -1121,6 +1121,7 @@
 	30 frames @ 30 fps	30 кадров при 30 кадр/с
 	Loop	Цикл
 	Render Video…	Экспорт видео…
+	EffectCraft Composition…	Композиция EffectCraft…
 	Split at Playhead	Разделить по индикатору текущего времени
 	Delete Timeline	Удалить шкалу времени
 	Reload Frame	Перезагрузить кадр

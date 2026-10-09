@@ -427,6 +427,7 @@ fn wraps(id: &str) -> bool {
             | "file.export.artboardsToFiles"
             | "file.export.artboardsToPdf"
             | "file.export.renderVideo"
+            | "file.export.effectcraft"
             | "layer.new.artboard"
             | "layer.videoLayers.newVideoLayerFromFile"
             | "layer.videoLayers.replaceFootage"
@@ -900,6 +901,15 @@ fn front(app: &mut PhotocraftApp, id: &str, params: &Value) -> Option<Result<Val
                 app,
                 json!({"dir": dir, "format": "mp4"}),
                 json!({"format": ["mp4", "png", "gif"]}),
+            )
+        }
+        "file.export.effectcraft" => {
+            let (_, _, name) = doc?;
+            let stem = name.rsplit_once('.').map_or(name.as_str(), |(a, _)| a).to_string();
+            dialog(
+                app,
+                json!({"path": format!("{dir}/{stem}.ecproj")}),
+                json!({}),
             )
         }
         "layer.new.artboard" => {

@@ -181,18 +181,17 @@ fn rasterize(s: &mut Session, _p: &Value) -> Result<Value> {
 // ------------------------------------------------------------------ file-based footage
 
 fn find_ffmpeg() -> Option<std::path::PathBuf> {
-    if let Ok(status) = std::process::Command::new("ffmpeg").arg("-version").stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status() {
-        if status.success() {
+    if let Ok(status) = std::process::Command::new("ffmpeg").arg("-version").stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status()
+        && status.success() {
             return Some("ffmpeg".into());
-        }
     }
     #[cfg(windows)]
     {
         if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
             let p = std::path::PathBuf::from(local_app_data);
             let winget_dir = p.join("Microsoft").join("WinGet").join("Packages");
-            if winget_dir.exists() {
-                if let Ok(entries) = std::fs::read_dir(&winget_dir) {
+            if winget_dir.exists()
+                && let Ok(entries) = std::fs::read_dir(&winget_dir) {
                     for entry in entries.flatten() {
                         let path = entry.path();
                         if path.to_string_lossy().to_ascii_lowercase().contains("ffmpeg") {
@@ -211,7 +210,6 @@ fn find_ffmpeg() -> Option<std::path::PathBuf> {
                             }
                         }
                     }
-                }
             }
             let winapps = p.join("Microsoft").join("WindowsApps").join("ffmpeg.exe");
             if winapps.exists() {
@@ -225,8 +223,8 @@ fn find_ffmpeg() -> Option<std::path::PathBuf> {
             }
         }
     }
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(parent) = exe_path.parent() {
+    if let Ok(exe_path) = std::env::current_exe()
+        && let Some(parent) = exe_path.parent() {
             let candidate = parent.join("ffmpeg.exe");
             if candidate.exists() {
                 return Some(candidate);
@@ -235,7 +233,6 @@ fn find_ffmpeg() -> Option<std::path::PathBuf> {
             if candidate_unix.exists() {
                 return Some(candidate_unix);
             }
-        }
     }
     None
 }
@@ -323,22 +320,19 @@ fn load_frames(path: &str, fmt: photocraft_color::PixelFormat) -> Result<Vec<Sur
     }
 
     // 2. Animated GIF files
-    if !p.is_dir() && p.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() == Some("gif") {
-        if let Ok(bytes) = std::fs::read(p) {
-            if let Ok(images) = photocraft_codecs::decode_gif_frames(&bytes) {
-                if !images.is_empty() {
-                    let mut frames = Vec::with_capacity(images.len());
-                    for (i, img) in images.iter().enumerate() {
-                        if let Ok(r) = photocraft_io::image_to_document(&format!("Frame {}", i + 1), img) {
-                            frames.push(crate::file_cmds::flattened(&r.document, fmt));
-                        }
-                    }
-                    if !frames.is_empty() {
-                        return Ok(frames);
-                    }
+    if !p.is_dir() && p.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() == Some("gif")
+        && let Ok(bytes) = std::fs::read(p)
+        && let Ok(images) = photocraft_codecs::decode_gif_frames(&bytes)
+        && !images.is_empty() {
+            let mut frames = Vec::with_capacity(images.len());
+            for (i, img) in images.iter().enumerate() {
+                if let Ok(r) = photocraft_io::image_to_document(&format!("Frame {}", i + 1), img) {
+                    frames.push(crate::file_cmds::flattened(&r.document, fmt));
                 }
             }
-        }
+            if !frames.is_empty() {
+                return Ok(frames);
+            }
     }
 
     // 3. Image sequences (directory) or single images
@@ -623,10 +617,9 @@ pub fn split_at_playhead(s: &mut Session, _p: &Value) -> Result<Value> {
                 (lower, upper)
             };
 
-            if let Some(l) = doc.layer_mut(id) {
-                if let Some(v_mut) = &mut l.video {
+            if let Some(l) = doc.layer_mut(id)
+                && let Some(v_mut) = &mut l.video {
                     v_mut.frames = lower_frames;
-                }
             }
 
             let mut upper_layer = orig.duplicate();
@@ -666,7 +659,7 @@ pub fn set_frame_count(s: &mut Session, p: &Value) -> Result<Value> {
             cmd: "layer.videoLayers.setFrameCount".into(),
             msg: "need `count` (frame count >= 1)".into(),
         })? as usize;
-    let count = count.max(1).min(100_000);
+    let count = count.clamp(1, 100_000);
     let fmt = s.active().ok_or(EngineError::NoDocument)?.doc.pixel_format();
     let target_layer = p.get("layer").and_then(Value::as_u64).map(LayerId);
     let r = s.edit("Change Video Frame Count", |doc, active| {
