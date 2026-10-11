@@ -1017,6 +1017,9 @@ fn documents(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 app.ui.views[d] = v;
                 if ui.input(|i| i.pointer.primary_pressed() && i.pointer.interact_pos().is_some_and(|p| cell.contains(p))) {
                     app.session.set_active(d);
+                    if app.session.active().is_some_and(|doc| doc.doc.timeline.is_some()) {
+                        app.ui.timeline.open = true;
+                    }
                 }
             }
             let stroke = if d == idx { Stroke::new(1.5, t.accent) } else { Stroke::new(1.0, Color32::from_black_alpha(160)) };
@@ -1167,6 +1170,9 @@ fn open_tab_clicks(
 ) {
     if let Some(i) = activate {
         app.session.set_active(i);
+        if app.session.active().is_some_and(|doc| doc.doc.timeline.is_some()) {
+            app.ui.timeline.open = true;
+        }
         app.jobs.focus = None;
     }
     if let Some(job) = focus_open {

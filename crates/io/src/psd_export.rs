@@ -1339,7 +1339,7 @@ fn document_to_psd_nested(doc: &Document, opts: &PsdExportOptions, depth: u32) -
     if let Some(Some(data)) = slices_resource {
         resources.push(ImageResource::new(crate::slices_map::SLICES, data));
     }
-    if let Some(r) = crate::video_map::export_resource(doc) {
+    for r in crate::video_map::export_resources(doc) {
         resources.push(r);
     }
     resources.push(version_info_resource(true));

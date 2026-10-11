@@ -42,6 +42,26 @@ fn test_roto_import_order() {
 }
 
 #[test]
+fn test_photoshop_video_layers_psd_import() {
+    let p = Path::new(r"C:\Users\franc\Downloads\TestVidLayersPsdfrom Pshop1.psd");
+    if !p.exists() {
+        return;
+    }
+    let Ok(bytes) = std::fs::read(p) else { return };
+    let Ok(file) = PsdFile::from_bytes(&bytes) else { return };
+    let (doc, warnings) = psd_to_document(&file);
+    assert!(doc.timeline.is_some(), "Expected document timeline to be active, warnings: {warnings:?}");
+    let tl = doc.timeline.as_ref().unwrap();
+    assert_eq!(tl.duration, 91, "Expected 91 frames duration on timeline");
+    // Check animated layers: Layer 1 (SnowVid.mp4) and TestRotoPsdfrom Pshop1 (embedded PSD)
+    let video_layers: Vec<_> = doc.layers.iter().filter(|l| l.video.is_some()).collect();
+    assert_eq!(video_layers.len(), 2, "Expected 2 animated layers with video data, found {}", video_layers.len());
+    for vl in &video_layers {
+        assert_eq!(vl.video.as_ref().unwrap().frames.len(), 91, "Expected 91 frames on video layer {}", vl.name);
+    }
+}
+
+#[test]
 fn test_synthetic_video_psd_roundtrip() {
     let mut doc = Document::new("Anim", Size::new(64, 64), ColorMode::Rgb, SampleType::U8);
     let fmt = PixelFormat {

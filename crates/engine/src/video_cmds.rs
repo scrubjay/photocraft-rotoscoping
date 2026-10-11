@@ -19,10 +19,12 @@ pub fn sync(doc: &mut Document) {
 fn sync_layers(layers: &mut [Layer], cur: usize) {
     for l in layers.iter_mut() {
         let frame = l.video.as_ref().filter(|v| !v.frames.is_empty()).map(|v| v.frames[cur.min(v.frames.len() - 1)].clone());
-        if let Some(f) = frame
-            && let LayerContent::Raster(s) = &mut l.content
-        {
-            *s = f;
+        if let Some(f) = frame {
+            match &mut l.content {
+                LayerContent::Raster(s) => *s = f,
+                LayerContent::Smart(sm) => sm.cache = Some(f),
+                _ => {}
+            }
         }
         if let Some(ch) = l.children_mut() {
             sync_layers(ch, cur);
@@ -37,14 +39,19 @@ pub fn commit_frame(doc: &mut Document, frame_idx: usize) {
 
 fn commit_layers(layers: &mut [Layer], frame_idx: usize) {
     for l in layers.iter_mut() {
-        if let Some(v) = &mut l.video
-            && let LayerContent::Raster(s) = &l.content
-        {
-            if frame_idx < v.frames.len() {
-                v.frames[frame_idx] = s.clone();
-            } else if frame_idx < 100_000 {
-                while v.frames.len() <= frame_idx {
-                    v.frames.push(s.clone());
+        if let Some(v) = &mut l.video {
+            let surf = match &l.content {
+                LayerContent::Raster(s) => Some(s),
+                LayerContent::Smart(sm) => sm.cache.as_ref(),
+                _ => None,
+            };
+            if let Some(s) = surf {
+                if frame_idx < v.frames.len() {
+                    v.frames[frame_idx] = s.clone();
+                } else if frame_idx < 100_000 {
+                    while v.frames.len() <= frame_idx {
+                        v.frames.push(s.clone());
+                    }
                 }
             }
         }
@@ -181,60 +188,7 @@ fn rasterize(s: &mut Session, _p: &Value) -> Result<Value> {
 // ------------------------------------------------------------------ file-based footage
 
 fn find_ffmpeg() -> Option<std::path::PathBuf> {
-    if let Ok(status) = std::process::Command::new("ffmpeg").arg("-version").stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status()
-        && status.success() {
-            return Some("ffmpeg".into());
-    }
-    #[cfg(windows)]
-    {
-        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-            let p = std::path::PathBuf::from(local_app_data);
-            let winget_dir = p.join("Microsoft").join("WinGet").join("Packages");
-            if winget_dir.exists()
-                && let Ok(entries) = std::fs::read_dir(&winget_dir) {
-                    for entry in entries.flatten() {
-                        let path = entry.path();
-                        if path.to_string_lossy().to_ascii_lowercase().contains("ffmpeg") {
-                            if let Ok(sub_entries) = std::fs::read_dir(&path) {
-                                for sub in sub_entries.flatten() {
-                                    let sub_path = sub.path();
-                                    let candidate = sub_path.join("bin").join("ffmpeg.exe");
-                                    if candidate.exists() {
-                                        return Some(candidate);
-                                    }
-                                }
-                            }
-                            let bin2 = path.join("bin").join("ffmpeg.exe");
-                            if bin2.exists() {
-                                return Some(bin2);
-                            }
-                        }
-                    }
-            }
-            let winapps = p.join("Microsoft").join("WindowsApps").join("ffmpeg.exe");
-            if winapps.exists() {
-                return Some(winapps);
-            }
-        }
-        if let Ok(prog_files) = std::env::var("ProgramFiles") {
-            let pf = std::path::PathBuf::from(prog_files).join("ffmpeg").join("bin").join("ffmpeg.exe");
-            if pf.exists() {
-                return Some(pf);
-            }
-        }
-    }
-    if let Ok(exe_path) = std::env::current_exe()
-        && let Some(parent) = exe_path.parent() {
-            let candidate = parent.join("ffmpeg.exe");
-            if candidate.exists() {
-                return Some(candidate);
-            }
-            let candidate_unix = parent.join("ffmpeg");
-            if candidate_unix.exists() {
-                return Some(candidate_unix);
-            }
-    }
-    None
+    photocraft_io::video_map::find_ffmpeg()
 }
 
 fn is_video_file(p: &std::path::Path) -> bool {
